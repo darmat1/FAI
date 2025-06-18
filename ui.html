@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+      margin: 0;
+      background-color: #f7f7f7;
+    }
+
+    .view {
+      padding: 16px;
+    }
+
+    #settingsView {
+      display: none;
+    }
+
+    h3 {
+      margin-top: 0;
+    }
+
+    textarea,
+    input[type="text"],
+    select {
+      width: 100%;
+      padding: 8px;
+      box-sizing: border-box;
+      border-radius: 4px;
+      border: 1px solid #ccc;
+      margin-bottom: 12px;
+    }
+
+    button {
+      width: 100%;
+      padding: 10px;
+      background-color: #0d99ff;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      font-weight: 600;
+    }
+
+    button.secondary {
+      background-color: #e0e0e0;
+      color: black;
+      margin-top: 8px;
+    }
+
+    #response {
+      margin-top: 16px;
+      padding: 10px;
+      background-color: white;
+      border-radius: 4px;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+      min-height: 50px;
+    }
+
+    .settings-icon {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      cursor: pointer;
+      font-size: 20px;
+    }
+
+    .back-icon {
+      cursor: pointer;
+      font-weight: bold;
+      margin-bottom: 10px;
+      display: inline-block;
+    }
+
+    .loader {
+      display: none;
+      margin-top: 16px;
+      text-align: center;
+    }
+
+    #response-container {
+      margin-top: 16px;
+    }
+
+    #response {
+      background-color: #2D2D2D;
+      color: #E0E0E0;
+      font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
+      padding: 10px;
+      border-radius: 4px;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+      min-height: 50px;
+      font-size: 12px;
+    }
+
+    button.primary {
+      background-color: #0d99ff;
+      color: white;
+    }
+
+    button.secondary {
+      background-color: #757575;
+      color: white;
+      margin-top: 8px;
+    }
+  </style>
+</head>
+
+<body>
+
+  <!-- Main View -->
+  <div id="mainView" class="view">
+    <div class="settings-icon" id="goToSettings">⚙️</div>
+    <h3>AI Assistant</h3>
+    <textarea id="prompt" rows="5"
+      placeholder="Describe the web page you want to create... e.g., 'A landing page for a pet adoption agency'"></textarea>
+    <button id="askButton" class="primary">Generate Layout</button>
+    <div class="loader" id="loader">Thinking...</div>
+    <div id="response-container" style="display: none;">
+      <div id="response"></div>
+      <button id="renderButton" class="secondary">Draw on Canvas</button>
+    </div>
+  </div>
+
+  <!-- Settings View -->
+  <div id="settingsView" class="view">
+    <div class="back-icon" id="goBack">← Back</div>
+    <h3>Settings</h3>
+    <label for="modelSelect">Select a model:</label>
+    <select id="modelSelect">
+      <option value="ollama">Local (Ollama)</option>
+      <option value="gemini">Google Gemini</option>
+      <option value="openai">OpenAI (ChatGPT)</option>
+      <option value="deepseek">DeepSeek</option>
+    </select>
+
+    <div id="gemini-settings">
+      <label for="geminiKey">Gemini API Key:</label>
+      <input type="text" id="geminiKey" placeholder="Enter your API key">
+    </div>
+    <div id="openai-settings" style="display: none;">
+      <label for="openaiKey">OpenAI API Key:</label>
+      <input type="text" id="openaiKey" placeholder="Enter your API key">
+    </div>
+    <div id="deepseek-settings" style="display: none;">
+      <label for="deepseekKey">DeepSeek API Key:</label>
+      <input type="text" id="deepseekKey" placeholder="Enter your API key">
+      <p style="font-size: 11px; color: #666; margin-top: -8px;">
+        Registration is free and includes 5M tokens. Get your key at platform.deepseek.com
+      </p>
+    </div>
+    <div id="ollama-settings" style="display: none;">
+      <label for="ollamaModelName">Ollama Model Name:</label>
+      <input type="text" id="ollamaModelName" placeholder="e.g., llama3, qwen:7b">
+      <p style="font-size: 11px; color: #666; margin-top: -8px;">
+        Make sure Ollama is running on your computer.
+      </p>
+    </div>
+
+    <button id="saveButton">Save</button>
+  </div>
+
+  <script>
+    // UI Elements
+    const mainView = document.getElementById('mainView');
+    const settingsView = document.getElementById('settingsView');
+    const goToSettings = document.getElementById('goToSettings');
+    const goBack = document.getElementById('goBack');
+    const modelSelect = document.getElementById('modelSelect');
+    const geminiKeyInput = document.getElementById('geminiKey');
+    const openaiKeyInput = document.getElementById('openaiKey');
+    const deepseekKeyInput = document.getElementById('deepseekKey');
+    const saveButton = document.getElementById('saveButton');
+    const askButton = document.getElementById('askButton');
+    const promptInput = document.getElementById('prompt');
+    const responseDiv = document.getElementById('response');
+    const loader = document.getElementById('loader');
+    const ollamaModelNameInput = document.getElementById('ollamaModelName');
+    const renderButton = document.getElementById('renderButton');
+    const responseContainer = document.getElementById('response-container');
+    let lastResponseJSON = '';
+
+    // View switching
+    goToSettings.onclick = () => {
+      mainView.style.display = 'none';
+      settingsView.style.display = 'block';
+    };
+    goBack.onclick = () => {
+      mainView.style.display = 'block';
+      settingsView.style.display = 'none';
+    };
+
+    // Show the correct API key input field
+    modelSelect.onchange = () => {
+      document.getElementById('gemini-settings').style.display = modelSelect.value === 'gemini' ? 'block' : 'none';
+      document.getElementById('openai-settings').style.display = modelSelect.value === 'openai' ? 'block' : 'none';
+      document.getElementById('deepseek-settings').style.display = modelSelect.value === 'deepseek' ? 'block' : 'none';
+      document.getElementById('ollama-settings').style.display = modelSelect.value === 'ollama' ? 'block' : 'none';
+    };
+
+    // Save settings
+    saveButton.onclick = () => {
+      const settings = {
+        model: modelSelect.value,
+        keys: {
+          gemini: geminiKeyInput.value,
+          openai: openaiKeyInput.value,
+          deepseek: deepseekKeyInput.value,
+        },
+        ollama: {
+          modelName: ollamaModelNameInput.value
+        }
+      };
+      parent.postMessage({ pluginMessage: { type: 'save-settings', settings } }, '*');
+    };
+
+    // Ask AI
+    askButton.onclick = () => {
+      loader.style.display = 'block';
+      responseContainer.style.display = 'none';
+      parent.postMessage({ pluginMessage: { type: 'ask-ai', prompt: promptInput.value } }, '*');
+    };
+
+    renderButton.onclick = () => {
+      if (lastResponseJSON) {
+        parent.postMessage({ pluginMessage: { type: 'render-layout', layoutData: lastResponseJSON } }, '*');
+      }
+    };
+
+    // Receive messages from Figma (AI response or loaded settings)
+    window.onmessage = event => {
+      const msg = event.data.pluginMessage;
+      switch (msg.type) {
+        case 'ai-response':
+          loader.style.display = 'none';
+          responseDiv.innerText = msg.text;
+          lastResponseJSON = msg.text;
+          responseContainer.style.display = 'block';
+          break;
+        case 'error':
+          loader.style.display = 'none';
+          responseDiv.innerText = 'Error: ' + msg.text;
+          break;
+        case 'settings-loaded':
+          const settings = msg.settings;
+          if (settings) {
+            modelSelect.value = settings.model || 'gemini';
+            geminiKeyInput.value = settings.keys?.gemini || '';
+            openaiKeyInput.value = settings.keys?.openai || '';
+            deepseekKeyInput.value = settings.keys?.deepseek || '';
+            ollamaModelNameInput.value = settings.ollama?.modelName || 'llama3';
+            modelSelect.dispatchEvent(new Event('change')); // Update visible fields
+          }
+          break;
+      }
+    };
+
+    // Request saved settings on launch
+    parent.postMessage({ pluginMessage: { type: 'get-settings' } }, '*');
+  </script>
+</body>
+
+</html>
